@@ -119,6 +119,55 @@ const handleGetProfile = async (req, res) => {
 };
 
 
+const handleUpdateProfile = async (req, res) => {
+  // Validate input
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    // Map errors into a simple array of messages
+    const errorMessages = errors.array().map((err) => err.msg);
+    return res.status(400).json({ success: false, errors: errorMessages });
+  }
+  try {
+    const userId = req.user.id; // from jwtAuthMiddleware
+    /**Taking userInput */
+    const { name, email, phone, password, address, gender, dateOfBirth } =
+      req.body;
+
+      //adding the field in updatefields which has come from request
+    const updateFields = {};
+    if (name) updateFields.name = name;
+    if (email) updateFields.email = email;
+    if (password) updateFields.password = password;
+    if (phone) updateFields.phone = phone;
+    if (address) updateFields.address = address;
+    if (gender) updateFields.gender = gender;
+    if (dateOfBirth) updateFields.dateOfBirth = dateOfBirth;
+
+    //check for the image 
+    if (req.file) {
+      updateFields.image = `/uploads/${req.file.filename}`;
+    }
+
+
+    //update the user
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    ).select("+password");
+
+    res.status(201).json({
+      success: true,
+      user: updatedUser,
+      message: "User Updated Successfully",
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ success: false, errors: ["Server error: " + error.message] });
+  }
+};
+
 
 handleRegisterUser.validate = [
   body("name")
@@ -137,10 +186,43 @@ handleLoginUser.validate = [
   body("password").notEmpty().withMessage("Password is required"),
 ];
 
+handleUpdateProfile.validate = [
+  body("name")
+    .optional()
+    .isLength({ min: 3 })
+    .withMessage("Name must be at least 3 characters long"),
+  body("phone")
+    .optional()
+    .isMobilePhone()
+    .withMessage("Please provide a valid phone number"),
+  body("gender")
+    .optional()
+    .isIn(["male", "female", "other"])
+    .withMessage("Gender must be male, female, or other"),
+  body("dateOfBirth")
+    .optional()
+    .matches(/^\d{2}-\d{2}-\d{4}$/)
+    .withMessage("Date of Birth must be in format DD-MM-YYYY"),
+  body("address.street")
+    .optional()
+    .notEmpty()
+    .withMessage("Street is required"),
+  body("address.city").optional().notEmpty().withMessage("City is required"),
+  body("address.state").optional().notEmpty().withMessage("State is required"),
+  body("address.postalCode")
+    .optional()
+    .notEmpty()
+    .withMessage("Postal code is required"),
+  body("address.country")
+    .optional()
+    .notEmpty()
+    .withMessage("Country is required"),
+];
 
 
 export {
   handleRegisterUser,
   handleLoginUser,
   handleGetProfile,
+  handleUpdateProfile
 };
