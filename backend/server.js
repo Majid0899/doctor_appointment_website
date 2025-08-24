@@ -2,7 +2,7 @@ import express from 'express'
 import dotenv from 'dotenv'
 import { createConnection } from './config/db.js';
 import userRouter from './routes/userRoute.js'
-
+import adminRouter from './routes/adminRoute.js'
 
 //creating an express app
 const app=new express();
@@ -20,6 +20,7 @@ const PORT=process.env.PORT || 5100;
 
 
 app.use("/user",userRouter)
+app.use("/admin",adminRouter)
 
 
 app.listen(PORT,()=>{

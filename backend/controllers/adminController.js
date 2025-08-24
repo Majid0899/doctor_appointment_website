@@ -1,0 +1,146 @@
+import { generateToken } from "../middlewares/auth.js";
+import { body,validationResult } from "express-validator";
+import Doctor from "../models/Doctor.js";
+import dotenv from 'dotenv'
+dotenv.config()
+
+const handleAdminLogin = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    // Map errors into a simple array of messages
+    const errorMessages = errors.array().map((err) => err.msg);
+    return res.status(400).json({ success: false, errors: errorMessages });
+  }
+  try {
+    const { email, password } = req.body;
+
+    if (
+      email !== process.env.ADMIN_EMAIL ||
+      password !== process.env.ADMIN_PASSWORD
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, error: ["Invalid Email And Password"] });
+    }
+
+    /**Generate a token */
+    const payload = {
+      email:process.env.ADMIN_EMAIL,
+      password:process.env.ADMIN_PASSWORD,
+      role:"ADMIN"
+    };
+
+    const token = generateToken(payload);
+    res.status(200).json({success:true,token})
+  } catch (error) {
+    res
+    .status(500)
+    .json({success:false,error:["Server error: " + error.message]})
+  }
+};
+
+const handleAddDoctor=async (req,res)=>{
+const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    // Map errors into a simple array of messages
+    const errorMessages = errors.array().map((err) => err.msg);
+    return res.status(400).json({ success: false, errors: errorMessages });
+  }
+  try {
+    if(req.user.role!=='ADMIN'){
+      return res.status(403).json({success:false,error:["Not Authorized Login Again"]})
+    }
+    const { name, email, password, speciality, degree, experience, about, fees, address} = req.body
+
+    let image;
+    if(req.file){
+        image=`/uploads/${req.file.filename}`
+    }
+
+    /** Check for Doctor */
+    const existingDoctor=await Doctor.findOne({email:email})
+    if(existingDoctor){
+        return res.status(400).json({success:false,error:["Doctor Already Exist"]})
+    }
+
+    const doctor=new Doctor({
+        name,
+        email,
+        password,
+        speciality,
+        degree,
+        experience,
+        about,
+        fees,
+        address,
+        ...(image && { image })
+    })
+
+    await doctor.save()
+
+    res.status(201).json({success:true,message:"Doctor Added Successfully",doctor})
+    
+  } catch (error) {
+    res.status(500).json({success:false,error:["Server error"+error.message]})
+  }
+}
+
+
+
+handleAdminLogin.validate = [
+  body("email").isEmail().withMessage("Please provide a valid email"),
+  body("password").notEmpty().withMessage("Password is required"),
+];
+
+handleAddDoctor.validate=[
+    body("name")
+    .notEmpty()
+    .withMessage("Name is required")
+    .isLength({ min: 3 })
+    .withMessage("Name must be at least 3 characters long"),
+  body("email").isEmail().withMessage("Please provide a valid email"),
+  body("password")
+    .isLength({ min: 8 })
+    .withMessage("Password must be at least 8 characters long"),
+
+ body("speciality")
+    .notEmpty()
+    .withMessage("Speciality is required"),
+      body("degree")
+    .notEmpty()
+    .withMessage("Degree is required"),
+
+  body("experience")
+    .isInt({ min: 0 })
+    .withMessage("Experience must be a non-negative number"),
+
+  body("about")
+    .notEmpty()
+    .withMessage("About field is required"),
+
+  body("fees")
+    .isFloat({ min: 0 })
+    .withMessage("Fees must be a positive number"),
+
+  body("address.street")
+    .notEmpty()
+    .withMessage("Street is required"),
+  body("address.city")
+    .notEmpty()
+    .withMessage("City is required"),
+  body("address.state")
+    .notEmpty()
+    .withMessage("State is required"),
+  body("address.postalCode")
+    .notEmpty()
+    .withMessage("Postal Code is required"),
+  body("address.country")
+    .notEmpty()
+    .withMessage("Country is required"),
+
+  
+]
+
+
+
+export { handleAdminLogin,handleAddDoctor};
