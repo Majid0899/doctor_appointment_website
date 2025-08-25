@@ -243,7 +243,7 @@ const handleBookAppointment = async (req, res) => {
     `;
 
     //send email
-    await sendEmail('majidkhan991208@gmail.com', "New Appointment Request", emailHtml);
+    await sendEmail(doctor.email, "New Appointment Request", emailHtml);
 
     res.status(201).json({
       success: true,

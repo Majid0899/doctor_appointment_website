@@ -3,6 +3,7 @@ import dotenv from 'dotenv'
 import { createConnection } from './config/db.js';
 import userRouter from './routes/userRoute.js'
 import adminRouter from './routes/adminRoute.js'
+import doctorRouter from './routes/doctorRoute.js'
 
 //creating an express app
 const app=new express();
@@ -21,6 +22,7 @@ const PORT=process.env.PORT || 5100;
 
 app.use("/user",userRouter)
 app.use("/admin",adminRouter)
+app.use("/doctor",doctorRouter)
 
 
 app.listen(PORT,()=>{
