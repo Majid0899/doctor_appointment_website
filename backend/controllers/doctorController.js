@@ -1,7 +1,9 @@
 import Doctor from "../models/Doctor.js";
 import { body, validationResult } from "express-validator";
 import { generateToken } from "../middlewares/auth.js";
-
+import Appointment from "../models/Appointment.js";
+import jwt from "jsonwebtoken";
+import { sendEmail } from "../config/sendEmail.js";
 
 const handleLogin = async (req, res) => {
   const errors = validationResult(req);
@@ -80,7 +82,107 @@ const handleChangeAvailability = async (req, res) => {
   }
 };
 
+const handleCancelAppointment = async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.params.token, process.env.ACTION_SECRET);
+    if (decoded.action !== "cancel") {
+      return res.status(400).send("<h2>Invalid action</h2>");
+    }
 
+    const appointment = await Appointment.findById(decoded.appointmentId)
+      .populate("user", "email")
+      .populate("doctor", "name");
+
+    //check for the appointments
+    if (!appointment) {
+      return res.status(404).send("<h2>Appointment Not Found</h2>");
+    }
+
+
+    //Prevent cancelling if already confirmed/cancelled
+    if (appointment.status === "confirmed") {
+      return res.status(400).send("<h2>❌ Appointment already confirmed. It cannot be cancelled via this link.</h2>");
+    }
+
+    if (appointment.status === "cancelled") {
+      return res.status(400).send("<h2>⚠️ Appointment already cancelled.</h2>");
+    }
+    if(appointment.status==='pending'){
+    
+      appointment.status = "cancelled";
+
+    await appointment.save();
+
+    // Send email to user
+    const emailHtml = `
+      <h2>Your Appointment is Cancelled </h2>
+      <p>Doctor: ${appointment.doctor.name}</p>
+      <p>Date: ${appointment.slotDate}</p>
+      <p>Time: ${appointment.slotTime}</p>
+      <p>We are sorry for the inconvenience!</p>
+    `;
+
+    await sendEmail(appointment.user.email, "Appointment Cancelled", emailHtml);
+
+    res.status(200).send("<h2>✅ Appointment Cancelled & User Notified</h2>");
+    }
+  } catch (error) {
+    if (error.name === "TokenExpiredError") {
+      return res.status(400).send("<h2>Link Expired </h2>");
+    }
+    res.status(500).send("<h2>Server Error </h2>");
+  }
+};
+
+const handleConfirmAppointment = async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.params.token, process.env.ACTION_SECRET);
+    if (decoded.action !== "confirm") {
+      return res.status(400).send("<h2>Invalid action</h2>");
+    }
+
+    const appointment = await Appointment.findById(decoded.appointmentId)
+      .populate("user", "email")
+      .populate("doctor", "name");
+
+      //check for the appointment
+    if (!appointment) {
+      return res.status(404).send("<h2>Appointment Not Found</h2>");
+    }
+
+    // 👉 Prevent cancelling if already confirmed/cancelled
+    if (appointment.status === "cancelled") {
+      return res.status(400).send("<h2>❌ Appointment already cancelled. It cannot be confirmed via this link.</h2>");
+    }
+
+    if (appointment.status === "confirmed") {
+      return res.status(400).send("<h2>⚠️ Appointment already confirmed.</h2>");
+    }
+
+    if(appointment.status==='pending'){
+    appointment.status = "confirmed";
+    await appointment.save();
+
+    // Send email to user
+    const emailHtml = `
+      <h2>Your Appointment is Confirmed </h2>
+      <p>Doctor: ${appointment.doctor.name}</p>
+      <p>Date: ${appointment.slotDate}</p>
+      <p>Time: ${appointment.slotTime}</p>
+      <p>We are sorry for the inconvenience!</p>
+    `;
+
+    await sendEmail(appointment.user.email, "Appointment Confirmed", emailHtml);
+
+    res.status(200).send("<h2> ✅ Appointment Confirmedd & User Notified </h2>");
+    }
+  } catch (error) {
+    if (error.name === "TokenExpiredError") {
+      return res.status(400).send("<h2>Link Expired </h2>");
+    }
+    res.status(500).send("<h2>Server Error </h2>");
+  }
+};
 
 handleLogin.validate = [
   body("email").isEmail().withMessage("Please provide a valid email"),
@@ -90,4 +192,6 @@ handleLogin.validate = [
 export {
   handleLogin,
   handleChangeAvailability,
+  handleCancelAppointment,
+  handleConfirmAppointment,
 };
