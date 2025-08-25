@@ -1,6 +1,9 @@
 import User from "../models/User.js";
-import { generateToken} from "../middlewares/auth.js";
+import { generateToken, generateActionToken } from "../middlewares/auth.js";
 import { body, validationResult } from "express-validator";
+import Doctor from "../models/Doctor.js";
+import Appointment from "../models/Appointment.js";
+import { sendEmail } from "../config/sendEmail.js";
 
 const handleRegisterUser = async (req, res) => {
   // Validate input
@@ -118,7 +121,6 @@ const handleGetProfile = async (req, res) => {
   }
 };
 
-
 const handleUpdateProfile = async (req, res) => {
   // Validate input
   const errors = validationResult(req);
@@ -167,6 +169,182 @@ const handleUpdateProfile = async (req, res) => {
       .json({ success: false, errors: ["Server error: " + error.message] });
   }
 };
+
+const handleBookAppointment = async (req, res) => {
+  // Validate input
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    // Map errors into a simple array of messages
+    const errorMessages = errors.array().map((err) => err.msg);
+    return res.status(400).json({ success: false, errors: errorMessages });
+  }
+
+  try {
+    const userId = req.user.id;
+    const doctorId = req.params.doctorId;
+    const { slotDate, slotTime } = req.body;
+
+    //  update doctor slots
+    const doctor = await Doctor.findOneAndUpdate(
+      {
+        _id: doctorId,
+        available: true,
+        // ensure slot is not already booked
+        $or: [
+          { [`slots_booked.${slotDate}`]: { $ne: slotTime } },
+          { [`slots_booked.${slotDate}`]: { $exists: false } },
+        ],
+      },
+      {
+        $push: { [`slots_booked.${slotDate}`]: slotTime },
+      },
+      { new: true }
+    );
+
+    //Check for the slot is booked or doctor is available or not
+    if (!doctor) {
+      return res.status(409).json({
+        success: false,
+        error: ["Slot not available or doctor not available"],
+      });
+    }
+
+    // Create appointment
+    const appointment = new Appointment({
+      user: userId,
+      doctor: doctorId,
+      slotDate,
+      slotTime,
+      amount: doctor.fees,
+    });
+
+    //save appointment
+    await appointment.save();
+
+    //create confirm and cancel token for doctor
+    const confirmToken = generateActionToken(appointment._id, "confirm");
+    const cancelToken = generateActionToken(appointment._id, "cancel");
+
+    const confirmUrl = `${process.env.BACKEND_URL}/doctor/confirm-appointment/${confirmToken}`;
+    const rejectUrl = `${process.env.BACKEND_URL}/doctor/cancel-appointment/${cancelToken}`;
+
+    //Notify Doctor
+    const emailHtml = `
+      <h2>New Appointment Request</h2>
+      <p>Dear Dr. ${doctor.name},</p>
+      <p>You have a new appointment request from <b>${req.user.username}</b>.</p>
+      <p><b>Date:</b> ${slotDate}</p>
+      <p><b>Time:</b> ${slotTime}</p>
+      <p><b>Fees:</b> ${doctor.fees}</p>
+      <p>Please take an action:</p>
+      <a href="${confirmUrl}" style="padding:10px 15px; background:green; color:white; text-decoration:none; border-radius:5px;">Confirm</a>
+      &nbsp;
+      <a href="${rejectUrl}" style="padding:10px 15px; background:red; color:white; text-decoration:none; border-radius:5px;">Reject</a>
+    `;
+
+    //send email
+    await sendEmail('majidkhan991208@gmail.com', "New Appointment Request", emailHtml);
+
+    res.status(201).json({
+      success: true,
+      message: "Appointment has been booked",
+      appointment,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: ["Server error: " + error.message],
+    });
+  }
+};
+
+const handleListAppointments = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const appointments = await Appointment.find({ user: userId })
+      .populate("user", "name email phone genderdateOfBirth")
+      .populate("doctor", "name email speciality ");
+    
+    //check for the appointment specific to user
+    if (appointments.length === 0) {
+      return res
+        .status(200)
+        .json({ success: true, message: ["No Appoinments"] });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Appoinments Fetched Successfully",
+      appointments,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: ["Server error" + error.message],
+    });
+  }
+};
+
+const handleCancelAndDeleteAppointment = async (req, res) => {
+  try {
+    const appointmentId = req.params.appointmentId;
+
+    const appointment = await Appointment.findById(appointmentId).
+    populate("user", "username email phone gender dateOfBirth")
+    .populate("doctor", "name email fees ");
+
+    //check for the appointment
+    if (!appointment) {
+      return res
+        .status(404)
+        .json({ success: false, error: ["No Appointment available"] });
+    }
+
+    
+    // Ensure only the user who booked can cancel
+    if(appointment.user._id.toString() !==req.user.id.toString()){
+      return res
+        .status(403)
+        .json({ success: false, error: ["Not authorized to cancel this appointment"] });
+    }
+    
+    appointment.status = "cancelled";
+
+    //save the appointment
+    await appointment.save();
+
+    // Free doctor's slot
+    await Doctor.findByIdAndUpdate(
+      appointment.doctor._id,
+      {
+        $pull: { [`slots_booked.${appointment.slotDate}`]: appointment.slotTime },
+      }
+    );
+
+    //Notify Doctor
+    const emailHtml = `
+      <h2>Appointment Cancelled</h2>
+      <p>Dear Dr. ${appointment.doctor.name},</p>
+      <p>The appointment scheduled with <b>${req.user.username}</b> has been cancelled.</p>
+      <p><b>Date:</b> ${appointment.slotDate}</p>
+      <p><b>Time:</b> ${appointment.slotTime}</p>
+      <p><b>Fees:</b> ${appointment.doctor.fees}</p>
+      <p>No further action is required.</p>
+    `;
+
+    await sendEmail(appointment.doctor.email,"Appointment Cancelled", emailHtml)
+
+    // Delete appointment
+    await Appointment.findByIdAndDelete(appointmentId);
+    res
+      .status(200)
+      .json({ success: true, message: "Appointment Cancelled", appointment });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ success: false, error: ["Server error" + error.message] });
+  }
+};
+
 
 
 handleRegisterUser.validate = [
@@ -219,10 +397,28 @@ handleUpdateProfile.validate = [
     .withMessage("Country is required"),
 ];
 
+handleBookAppointment.validate = [
+  body("slotDate")
+    .notEmpty()
+    .withMessage("Slot date is required")
+    .matches(/^\d{2}-\d{2}-\d{4}$/)
+    .withMessage("Date must be in DD-MM-YYYY format"),
+
+  body("slotTime")
+  .notEmpty()
+  .withMessage("Slot time is required")
+  .matches(/^(0?[1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i)
+  .withMessage("Time must be in hh:mm AM/PM format"),
+
+];
 
 export {
   handleRegisterUser,
   handleLoginUser,
   handleGetProfile,
-  handleUpdateProfile
+  handleUpdateProfile,
+  handleBookAppointment,
+  handleCancelAndDeleteAppointment,
+  handleListAppointments,
 };
+
