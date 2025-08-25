@@ -1,6 +1,7 @@
 import { generateToken } from "../middlewares/auth.js";
 import { body,validationResult } from "express-validator";
 import Doctor from "../models/Doctor.js";
+import User from '../models/User.js'
 import Appointment from "../models/Appointment.js"
 import dotenv from 'dotenv'
 
@@ -174,6 +175,47 @@ const handleAllAppointments=async(req,res)=>{
   }
 }
 
+const handleDashBoard = async (req, res) => {
+  try {
+
+    //Authorize admin only
+    if(req.user.role !== 'ADMIN'){
+      return res.status(403).json({success:false,error:["Not Authorized. Pleae Login Again"]})
+    }
+
+    // Get counts of doctor and patient
+    const doctorCount = await Doctor.countDocuments();
+    const patientCount = await User.countDocuments();
+
+    // Fetch latest 5 appointments only
+    const latestAppointments = await Appointment.find({})
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("doctor", "name speciality") 
+      .populate("user", "name email");   
+
+      //create the output structure
+    const dashData = {
+      totalDoctors: doctorCount,
+      totalPatients: patientCount,
+      latestAppointments,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Dashboard data fetched successfully",
+      dashData,
+    });
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({
+      success: false,
+      error: ["Something went wrong while fetching dashboard data"+error.message],
+      
+    });
+  }
+};
+
 handleAdminLogin.validate = [
   body("email").isEmail().withMessage("Please provide a valid email"),
   body("password").notEmpty().withMessage("Password is required"),
@@ -230,4 +272,4 @@ handleAddDoctor.validate=[
 
 
 
-export { handleAdminLogin,handleAddDoctor,handleAllDoctors,handleAllAppointments};
+export { handleAdminLogin,handleAddDoctor,handleAllDoctors,handleAllAppointments,handleDashBoard};
