@@ -1,7 +1,9 @@
 import { generateToken } from "../middlewares/auth.js";
 import { body,validationResult } from "express-validator";
 import Doctor from "../models/Doctor.js";
+import Appointment from "../models/Appointment.js"
 import dotenv from 'dotenv'
+
 dotenv.config()
 
 const handleAdminLogin = async (req, res) => {
@@ -14,6 +16,8 @@ const handleAdminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+
+    //verify the admin email and password
     if (
       email !== process.env.ADMIN_EMAIL ||
       password !== process.env.ADMIN_PASSWORD
@@ -52,6 +56,7 @@ const errors = validationResult(req);
     }
     const { name, email, password, speciality, degree, experience, about, fees, address} = req.body
 
+    //check for the image
     let image;
     if(req.file){
         image=`/uploads/${req.file.filename}`
@@ -63,6 +68,7 @@ const errors = validationResult(req);
         return res.status(400).json({success:false,error:["Doctor Already Exist"]})
     }
 
+    //create  a doctor
     const doctor=new Doctor({
         name,
         email,
@@ -76,6 +82,7 @@ const errors = validationResult(req);
         ...(image && { image })
     })
 
+    //add a doctor
     await doctor.save()
 
     res.status(201).json({success:true,message:"Doctor Added Successfully",doctor})
@@ -85,7 +92,87 @@ const errors = validationResult(req);
   }
 }
 
+const handleAllDoctors=async(req,res)=>{
+  try {
+    //Authorize the admin 
+    if(req.user.role !== 'ADMIN'){
+      return res.status(403).json({success:false,error:["Not Authorized. Pleae Login Again"]})
+    }
+    //if the data is large
+    const page=parseInt(req.query.page) || 1;
+    const limit=parseInt(req.query.limit) || 10;
+    const skip=(page-1)*limit;
+    
+    
+    const [doctors, totalDoctors] = await Promise.all([
+      Doctor.find({}).select("-password").skip(skip).limit(limit),
+      Doctor.countDocuments(),
+    ]);
+    
+    //check for the doctor
+    if(doctors.length===0){
+      return res.status(200).json({success:true,message:["No Doctors are available"]})
+    }
 
+    res.status(200).json({
+      success: true,
+      message: "Doctors fetched successfully",
+      doctors: doctors,
+      pagination: {
+        total: totalDoctors,
+        page,
+        limit,
+        totalPages: Math.ceil(totalDoctors / limit),
+      },
+    })
+    
+  } catch (error) {
+    res.status(500).json({
+      success:false,
+      error:["Server error"+error.message]
+    })
+  }
+}
+
+const handleAllAppointments=async(req,res)=>{
+  try {
+    //Authorize the admin
+    if(req.user.role !== 'ADMIN'){
+      return res.status(403).json({success:false,error:["Not Authorized. Pleae Login Again"]})
+    }
+    //for large data
+    const page=parseInt(req.query.page) || 1;
+    const limit=parseInt(req.query.limit) || 10;
+    const skip=(page-1)*limit;
+    
+  const [appointments, totalAppointments] = await Promise.all([
+      Appointment.find({}).skip(skip).limit(limit),
+      Appointment.countDocuments(),
+    ]);
+
+    if(appointments.length===0){
+      return res.status(400).json({success:true,message:["No Appointments are available"]})
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Appointment fetched successfully",
+      appointments:appointments,
+      pagination: {
+        total: totalAppointments,
+        page,
+        limit,
+        totalPages: Math.ceil(totalAppointments/ limit),
+      },
+    })
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({
+      success:false,
+      error:["Server error"+error.message]
+    })
+  }
+}
 
 handleAdminLogin.validate = [
   body("email").isEmail().withMessage("Please provide a valid email"),
@@ -143,4 +230,4 @@ handleAddDoctor.validate=[
 
 
 
-export { handleAdminLogin,handleAddDoctor};
+export { handleAdminLogin,handleAddDoctor,handleAllDoctors,handleAllAppointments};
