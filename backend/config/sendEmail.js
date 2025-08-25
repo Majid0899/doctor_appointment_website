@@ -13,12 +13,18 @@ export const sendEmail = async (to, subject, html) => {
       },
     });
 
-    await transporter.sendMail({
+    const mailBody={
       from: `"MyApp" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       html,
-    });
+    }
+    if (cc) {
+      mailOptions.cc = cc;
+    }
+    await transporter.sendMail(mailBody);
+    
+    console.log("Email Send Successfully")
   } catch (error) {
     console.error("Email send failed:", error.message);
   }
