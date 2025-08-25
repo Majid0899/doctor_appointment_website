@@ -289,7 +289,7 @@ const handleCancelAndDeleteAppointment = async (req, res) => {
     const appointmentId = req.params.appointmentId;
 
     const appointment = await Appointment.findById(appointmentId).
-    populate("user", "username email phone gender dateOfBirth")
+    populate("user", "name email phone gender dateOfBirth")
     .populate("doctor", "name email fees ");
 
     //check for the appointment
