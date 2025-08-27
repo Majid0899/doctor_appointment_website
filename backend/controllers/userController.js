@@ -51,7 +51,6 @@ const handleRegisterUser = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      user,
       message: "User registered successfully",
       token,
     });
@@ -80,7 +79,7 @@ const handleLoginUser = async (req, res) => {
     if (!user || !(await user.comparePassword(password))) {
       return res
         .status(401)
-        .json({ success: false, error: ["Invalid Email and password"] });
+        .json({ success: false, errors: ["Invalid Email and password"] });
     }
     /**Generate a token */
     const payload = {
@@ -93,7 +92,7 @@ const handleLoginUser = async (req, res) => {
 
     res
       .status(200)
-      .json({ success: true, user, message: "Login Successfull", token });
+      .json({ success: true,message: "Login Successfull", token });
   } catch (error) {
     res
       .status(500)
@@ -345,6 +344,24 @@ const handleCancelAndDeleteAppointment = async (req, res) => {
   }
 };
 
+const handleGetAllDoctors=async(req,res)=>{
+  try {
+    const doctors=await Doctor.find({})
+    if(doctors.length===0){
+      return res.status(200).json({success:true,message:["No Doctors Found"]})
+    }
+
+    res.status(200).json({success:true,doctors})
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: ["Server error" + error.message],
+    });
+    
+  }
+}
+
 
 
 handleRegisterUser.validate = [
@@ -357,6 +374,40 @@ handleRegisterUser.validate = [
   body("password")
     .isLength({ min: 8 })
     .withMessage("Password must be at least 8 characters long"),
+  body("phone")
+      .notEmpty()
+      .withMessage("Phone number is required")
+      .isMobilePhone()
+      .withMessage("Please provide a valid phone number"),
+
+    body("address.street")
+      .notEmpty()
+      .withMessage("Street is required"),
+
+    body("address.city")
+      .notEmpty()
+      .withMessage("City is required"),
+
+    body("address.state")
+      .notEmpty()
+      .withMessage("State is required"),
+
+    body("address.postalCode")
+      .notEmpty()
+      .withMessage("Postal code is required"),
+
+    body("address.country")
+      .notEmpty()
+      .withMessage("Country is required"),
+
+    body("gender")
+      .notEmpty()
+      .withMessage("Gender is required")
+      .isIn(["male", "female", "other"])
+      .withMessage("Gender must be male, female, or other"),
+    body("dateOfBirth")
+  .notEmpty()
+  .withMessage("Date of birth is required")
 ];
 
 handleLoginUser.validate = [
@@ -420,5 +471,6 @@ export {
   handleBookAppointment,
   handleCancelAndDeleteAppointment,
   handleListAppointments,
+  handleGetAllDoctors
 };
 
