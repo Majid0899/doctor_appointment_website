@@ -1,5 +1,6 @@
 import express from 'express'
 import dotenv from 'dotenv'
+import cors from 'cors'
 import { createConnection } from './config/db.js';
 import userRouter from './routes/userRoute.js'
 import adminRouter from './routes/adminRoute.js'
@@ -19,6 +20,7 @@ app.use(express.json())
 //Define PORT
 const PORT=process.env.PORT || 5100;
 
+app.use(cors())
 
 app.use("/user",userRouter)
 app.use("/admin",adminRouter)
