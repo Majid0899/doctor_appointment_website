@@ -14,7 +14,6 @@ const useData = (api) => {
       setLoading(true)
       try {
         const response = await axios.get(`${backendUrl}/${api}`)
-        console.log(response.data)
         setData(response.data)
         setServerError(null)
       } catch (error) {

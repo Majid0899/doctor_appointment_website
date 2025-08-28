@@ -2,11 +2,17 @@ import React from "react";
 import { useState } from "react";
 import { toast } from "react-toastify";
 import axios from "axios";
+import {loginSuccess} from '../redux/userSlice.js'
+import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
 const LoginModal = ({ setShowModal }) => {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
+
+  const dispatch=useDispatch()
+  const navigate=useNavigate()
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -23,7 +29,7 @@ const LoginModal = ({ setShowModal }) => {
       });
       console.log(response)
       if (response?.data?.success) {
-        localStorage.setItem("token", response?.data?.token);
+        dispatch(loginSuccess(response?.data?.token))
       }
       toast.success(response?.data?.message, {
         position: "top-center",
@@ -34,6 +40,7 @@ const LoginModal = ({ setShowModal }) => {
         email: "",
         password: "",
       });
+      navigate("/")
     } catch (error) {
       console.log(error)
       if (!error.response?.data?.success) {

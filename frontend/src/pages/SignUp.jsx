@@ -4,6 +4,9 @@ import "react-datepicker/dist/react-datepicker.css";
 import LoginModal from "../components/LoginModal";
 import axios from "axios";
 import { toast } from "react-toastify";
+import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { loginSuccess } from "../redux/userSlice";
 
 const SignUp = () => {
   const [startDate, setStartDate] = useState(null);
@@ -24,6 +27,9 @@ const SignUp = () => {
     country: "",
   });
 
+  const dispatch=useDispatch()
+  const navigate=useNavigate()
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -41,7 +47,7 @@ const SignUp = () => {
         address,
       });
       if (response?.data?.success) {
-        localStorage.setItem("token", response?.data?.token);
+        dispatch(loginSuccess(response?.data?.token))
       }
 
       toast.success(response?.data?.message, {
@@ -64,6 +70,7 @@ const SignUp = () => {
         postalCode: "",
         country: "",
       });
+      navigate("/")
     } catch (error) {
       if (!error.response?.data?.success) {
         error.response.data.errors.forEach((err) => {

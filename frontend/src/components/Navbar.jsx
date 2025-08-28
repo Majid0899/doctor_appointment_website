@@ -1,12 +1,26 @@
-import { useState } from "react";
-import { NavLink,Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Link } from "react-router-dom";
 import { assets } from "../assets/assets_frontend/assets";
-
+import { useDispatch, useSelector } from "react-redux";
+import { logout, userProfile } from "../redux/userSlice";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const dispatch = useDispatch();
 
+  const { token, user, loading, error } = useSelector((state) => state.user);
 
+  useEffect(() => {
+    if (token) {
+      dispatch(userProfile(token));
+    }
+  }, [dispatch, token]); // runs when token changes
+
+  console.log(loading, error, user);
+
+  const handleLogout=()=>{
+    dispatch(logout())
+  }
   return (
     <>
       <div className="navbar bg-base-100 shadow-sm">
@@ -35,7 +49,9 @@ const Navbar = () => {
 
           {/* LOGO */}
           <div className="px-4">
-            <Link to="/"><img className="w-44 cursor-pointer" src={assets.logo} alt="" /></Link>
+            <Link to="/">
+              <img className="w-44 cursor-pointer" src={assets.logo} alt="" />
+            </Link>
           </div>
         </div>
 
@@ -95,20 +111,40 @@ const Navbar = () => {
         </div>
 
         {/* RIGHT */}
-        <div className="navbar-end">
-          <Link to="/signup"><button className="btn text-white bg-blue-600 rounded-2xl">Create Account</button></Link>
-        </div>
+        {token ? (
+          <div className="dropdown dropdown-bottom navbar-end avatar">
+            <div tabIndex={0} className="ring-primary ring-offset-base-100 w-12 h-12 rounded-full ring-2 ring-offset-2">
+              <img src={user?.image} />
+            </div>
+            <ul tabIndex={0} className="menu my-1 dropdown-content bg-base-200 rounded-box z-1 w-52 p-2 shadow-sm">
+              <li>
+                <Link to="/myprofile">MyProfile</Link>
+              </li>
+              <li>
+                <Link to="/appointments">Appointments</Link>
+              </li>
+              <div>
+                <button onClick={handleLogout}className="btn hover:bg-red-600">Logout</button>
+              </div>
+            </ul>
+          </div>
+        ) : (
+          <div className="navbar-end">
+            <Link to="/signup">
+              <button className="btn text-white bg-blue-600 rounded-2xl">
+                Create Account
+              </button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* MOBILE SIDEBAR */}
       {isOpen && (
-        <div
-          className="fixed inset-0  z-40"
-          onClick={() => setIsOpen(false)} 
-        >
+        <div className="fixed inset-0  z-40" onClick={() => setIsOpen(false)}>
           <div
             className="w-80 bg-base-200 min-h-full p-4 z-50"
-            onClick={(e) => e.stopPropagation()} 
+            onClick={(e) => e.stopPropagation()}
           >
             <ul className="menu menu-vertical gap-6">
               <li>
@@ -163,16 +199,11 @@ const Navbar = () => {
                   CONTACT
                 </NavLink>
               </li>
-              <div className="px-4">
-          <button className="btn bg-blue-600 text-white">Logout</button>
-        </div>
+              
             </ul>
-            
           </div>
-          
         </div>
       )}
-      
     </>
   );
 };
