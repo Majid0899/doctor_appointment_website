@@ -5,6 +5,7 @@ import { createConnection } from './config/db.js';
 import userRouter from './routes/userRoute.js'
 import adminRouter from './routes/adminRoute.js'
 import doctorRouter from './routes/doctorRoute.js'
+import path from 'path'
 
 //creating an express app
 const app=new express();
@@ -25,6 +26,8 @@ app.use(cors())
 app.use("/user",userRouter)
 app.use("/admin",adminRouter)
 app.use("/doctor",doctorRouter)
+
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 
 app.listen(PORT,()=>{
