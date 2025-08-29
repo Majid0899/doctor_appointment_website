@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Link } from "react-router-dom";
+import { NavLink, Link, useNavigate } from "react-router-dom";
 import { assets } from "../assets/assets_frontend/assets";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, userProfile } from "../redux/userSlice";
@@ -7,20 +7,22 @@ import { logout, userProfile } from "../redux/userSlice";
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   const { token, user, loading, error } = useSelector((state) => state.user);
-
+  
   useEffect(() => {
     if (token) {
       dispatch(userProfile(token));
     }
   }, [dispatch, token]); // runs when token changes
 
-  console.log(loading, error, user);
+ 
 
-  const handleLogout=()=>{
-    dispatch(logout())
-  }
+  const handleLogout = () => {
+    dispatch(logout());
+    navigate("/");
+  };
   return (
     <>
       <div className="navbar bg-base-100 shadow-sm">
@@ -113,10 +115,16 @@ const Navbar = () => {
         {/* RIGHT */}
         {token ? (
           <div className="dropdown dropdown-bottom navbar-end avatar">
-            <div tabIndex={0} className="ring-primary ring-offset-base-100 w-12 h-12 rounded-full ring-2 ring-offset-2">
-              <img src={user?.image} />
+            <div
+              tabIndex={0}
+              className="ring-primary ring-offset-base-100 w-12 h-12 rounded-full ring-2 ring-offset-2"
+            >
+              <img src={`${import.meta.env.VITE_BACKEND_URL}${user?.image} `}/>
             </div>
-            <ul tabIndex={0} className="menu my-1 dropdown-content bg-base-200 rounded-box z-1 w-52 p-2 shadow-sm">
+            <ul
+              tabIndex={0}
+              className="menu my-1 dropdown-content bg-base-200 rounded-box z-1 w-52 p-2 shadow-sm"
+            >
               <li>
                 <Link to="/myprofile">MyProfile</Link>
               </li>
@@ -124,7 +132,9 @@ const Navbar = () => {
                 <Link to="/appointments">Appointments</Link>
               </li>
               <div>
-                <button onClick={handleLogout}className="btn hover:bg-red-600">Logout</button>
+                <button onClick={handleLogout} className="btn hover:bg-red-600">
+                  Logout
+                </button>
               </div>
             </ul>
           </div>
@@ -199,7 +209,6 @@ const Navbar = () => {
                   CONTACT
                 </NavLink>
               </li>
-              
             </ul>
           </div>
         </div>

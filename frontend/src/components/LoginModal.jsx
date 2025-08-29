@@ -41,6 +41,7 @@ const LoginModal = ({ setShowModal }) => {
         password: "",
       });
       navigate("/")
+      scrollTo(0, 0);
     } catch (error) {
       console.log(error)
       if (!error.response?.data?.success) {
