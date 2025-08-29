@@ -150,16 +150,26 @@ const handleUpdateProfile = async (req, res) => {
     }
 
 
+    
     //update the user
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { $set: updateFields },
-      { new: true, runValidators: true }
-    ).select("+password");
+    const user = await User.findById(userId).select("+password");
+if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+// update only changed fields
+if (name) user.name = name;
+if (email) user.email = email;
+if (password) user.password = password; // will get hashed in pre("save")
+if (phone) user.phone = phone;
+if (address) user.address = address;
+if (gender) user.gender = gender;
+if (dateOfBirth) user.dateOfBirth = dateOfBirth;
+if (req.file) user.image = `/uploads/${req.file.filename}`;
+
+await user.save(); 
 
     res.status(201).json({
       success: true,
-      user: updatedUser,
+      user,
       message: "User Updated Successfully",
     });
   } catch (error) {
@@ -429,9 +439,8 @@ handleUpdateProfile.validate = [
     .isIn(["male", "female", "other"])
     .withMessage("Gender must be male, female, or other"),
   body("dateOfBirth")
-    .optional()
-    .matches(/^\d{2}-\d{2}-\d{4}$/)
-    .withMessage("Date of Birth must be in format DD-MM-YYYY"),
+  .notEmpty()
+  .withMessage("Date of birth is required"),
   body("address.street")
     .optional()
     .notEmpty()
