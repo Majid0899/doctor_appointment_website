@@ -303,10 +303,37 @@ const handleCancelAndDeleteAppointment = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: ["Server error" + error.message],
+      errors: ["Server error" + error.message],
     });
   }
 };
+
+const handleDeleteDoctor=async(req,res)=>{
+try {
+  //Auhtorize  admin only
+    if (req.user.role !== "ADMIN") {
+      return res
+        .status(403)
+        .json({ success: false, error: ["Not Authorized. Please Login Again"] });
+    }
+  const doctorId=req.params.doctorId;
+
+  const doctor=await Doctor.findByIdAndDelete(doctorId)
+
+  if(!doctor){
+    return res.status(404).json({success:false,errors:["Doctor not found"]})
+  }
+
+  res.status(200).json({success:true,message:"Doctor Deleted Successfullys"})
+
+  
+} catch (error) {
+  res.status(500).json({
+      success: false,
+      errors: ["Server error" + error.message],
+    });
+}
+}
 
 handleAdminLogin.validate = [
   body("email").isEmail().withMessage("Please provide a valid email"),
@@ -350,5 +377,6 @@ export {
   handleAllDoctors,
   handleAllAppointments,
   handleDashBoard,
-  handleCancelAndDeleteAppointment
+  handleCancelAndDeleteAppointment,
+  handleDeleteDoctor
 };

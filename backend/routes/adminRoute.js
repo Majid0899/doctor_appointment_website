@@ -1,5 +1,5 @@
 import express from 'express'
-import {handleAddDoctor, handleAdminLogin,handleAllDoctors,handleAllAppointments,handleDashBoard, handleCancelAndDeleteAppointment} from '../controllers/adminController.js'
+import {handleAddDoctor, handleAdminLogin,handleAllDoctors,handleAllAppointments,handleDashBoard, handleCancelAndDeleteAppointment,handleDeleteDoctor} from '../controllers/adminController.js'
 import { jwtAuthMiddleware } from '../middlewares/auth.js';
 import {parseAddressMiddleware} from '../middlewares/parseAddress.js'
 import upload from '../middlewares/upload.js'
@@ -11,5 +11,6 @@ router.post("/add-doctor",jwtAuthMiddleware,upload.single("image"),parseAddressM
 router.get("/all-doctors",jwtAuthMiddleware,handleAllDoctors)
 router.get("/all-appointments",jwtAuthMiddleware,handleAllAppointments)
 router.get("/dashboard",jwtAuthMiddleware,handleDashBoard)
+router.delete("/delete-doctor/:doctorId",jwtAuthMiddleware,handleDeleteDoctor)
 router.put("/cancel-appointment/:appointmentId",jwtAuthMiddleware,handleCancelAndDeleteAppointment)
 export default router
