@@ -4,6 +4,9 @@ import { body, validationResult } from "express-validator";
 import Doctor from "../models/Doctor.js";
 import Appointment from "../models/Appointment.js";
 import { sendEmail } from "../config/sendEmail.js";
+import crypto from "crypto";
+import dotenv from "dotenv";
+dotenv.config();
 
 const handleRegisterUser = async (req, res) => {
   // Validate input
@@ -92,7 +95,7 @@ const handleLoginUser = async (req, res) => {
 
     res
       .status(200)
-      .json({ success: true,message: "Login Successfull", token });
+      .json({ success: true, message: "Login Successfull", token });
   } catch (error) {
     res
       .status(500)
@@ -104,7 +107,7 @@ const handleGetProfile = async (req, res) => {
   try {
     const userId = req.user.id; //from jwtAuthmiddleware
     const user = await User.findById(userId).select("+password");
-    
+
     //check for the user is not present or not
     if (!user) {
       return res
@@ -134,7 +137,7 @@ const handleUpdateProfile = async (req, res) => {
     const { name, email, phone, password, address, gender, dateOfBirth } =
       req.body;
 
-      //adding the field in updatefields which has come from request
+    //adding the field in updatefields which has come from request
     const updateFields = {};
     if (name) updateFields.name = name;
     if (email) updateFields.email = email;
@@ -144,28 +147,29 @@ const handleUpdateProfile = async (req, res) => {
     if (gender) updateFields.gender = gender;
     if (dateOfBirth) updateFields.dateOfBirth = dateOfBirth;
 
-    //check for the image 
+    //check for the image
     if (req.file) {
       updateFields.image = `/uploads/${req.file.filename}`;
     }
 
-
-    
     //update the user
     const user = await User.findById(userId).select("+password");
-if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
-// update only changed fields
-if (name) user.name = name;
-if (email) user.email = email;
-if (password) user.password = password; // will get hashed in pre("save")
-if (phone) user.phone = phone;
-if (address) user.address = address;
-if (gender) user.gender = gender;
-if (dateOfBirth) user.dateOfBirth = dateOfBirth;
-if (req.file) user.image = `/uploads/${req.file.filename}`;
+    // update only changed fields
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (password) user.password = password; // will get hashed in pre("save")
+    if (phone) user.phone = phone;
+    if (address) user.address = address;
+    if (gender) user.gender = gender;
+    if (dateOfBirth) user.dateOfBirth = dateOfBirth;
+    if (req.file) user.image = `/uploads/${req.file.filename}`;
 
-await user.save(); 
+    await user.save();
 
     res.status(201).json({
       success: true,
@@ -191,7 +195,28 @@ const handleBookAppointment = async (req, res) => {
   try {
     const userId = req.user.id;
     const doctorId = req.params.doctorId;
-    const { slotDate, slotTime } = req.body;
+    const {
+      slotDate,
+      slotTime,
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    } = req.body;
+
+    // Verify Razorpay Payment Signature
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body.toString())
+      .digest("hex");
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        error: ["Payment is not done. Please complete the payment."],
+      });
+    }
 
     //  update doctor slots
     const doctor = await Doctor.findOneAndUpdate(
@@ -225,6 +250,7 @@ const handleBookAppointment = async (req, res) => {
       slotDate,
       slotTime,
       amount: doctor.fees,
+      payment: true, // ✅ set true after successful payment
     });
 
     //save appointment
@@ -273,7 +299,7 @@ const handleListAppointments = async (req, res) => {
     const appointments = await Appointment.find({ user: userId })
       .populate("user", "name email phone genderdateOfBirth")
       .populate("doctor", "name email speciality ");
-    
+
     //check for the appointment specific to user
     if (appointments.length === 0) {
       return res
@@ -297,9 +323,9 @@ const handleCancelAndDeleteAppointment = async (req, res) => {
   try {
     const appointmentId = req.params.appointmentId;
 
-    const appointment = await Appointment.findById(appointmentId).
-    populate("user", "name email phone gender dateOfBirth")
-    .populate("doctor", "name email fees ");
+    const appointment = await Appointment.findById(appointmentId)
+      .populate("user", "name email phone gender dateOfBirth")
+      .populate("doctor", "name email fees ");
 
     //check for the appointment
     if (!appointment) {
@@ -308,26 +334,25 @@ const handleCancelAndDeleteAppointment = async (req, res) => {
         .json({ success: false, error: ["No Appointment available"] });
     }
 
-    
     // Ensure only the user who booked can cancel
-    if(appointment.user._id.toString() !==req.user.id.toString()){
+    if (appointment.user._id.toString() !== req.user.id.toString()) {
       return res
         .status(403)
-        .json({ success: false, error: ["Not authorized to cancel this appointment"] });
+        .json({
+          success: false,
+          error: ["Not authorized to cancel this appointment"],
+        });
     }
-    
+
     appointment.status = "cancelled";
 
     //save the appointment
     await appointment.save();
 
     // Free doctor's slot
-    await Doctor.findByIdAndUpdate(
-      appointment.doctor._id,
-      {
-        $pull: { [`slots_booked.${appointment.slotDate}`]: appointment.slotTime },
-      }
-    );
+    await Doctor.findByIdAndUpdate(appointment.doctor._id, {
+      $pull: { [`slots_booked.${appointment.slotDate}`]: appointment.slotTime },
+    });
 
     //Notify Doctor
     const emailHtml = `
@@ -340,7 +365,11 @@ const handleCancelAndDeleteAppointment = async (req, res) => {
       <p>No further action is required.</p>
     `;
 
-    await sendEmail(appointment.doctor.email,"Appointment Cancelled", emailHtml)
+    await sendEmail(
+      appointment.doctor.email,
+      "Appointment Cancelled",
+      emailHtml
+    );
 
     // Delete appointment
     await Appointment.findByIdAndDelete(appointmentId);
@@ -354,25 +383,23 @@ const handleCancelAndDeleteAppointment = async (req, res) => {
   }
 };
 
-const handleGetAllDoctors=async(req,res)=>{
+const handleGetAllDoctors = async (req, res) => {
   try {
-    const doctors=await Doctor.find({})
-    if(doctors.length===0){
-      return res.status(200).json({success:true,message:["No Doctors Found"]})
+    const doctors = await Doctor.find({});
+    if (doctors.length === 0) {
+      return res
+        .status(200)
+        .json({ success: true, message: ["No Doctors Found"] });
     }
 
-    res.status(200).json({success:true,doctors})
-    
+    res.status(200).json({ success: true, doctors });
   } catch (error) {
     res.status(500).json({
       success: false,
       error: ["Server error" + error.message],
     });
-    
   }
-}
-
-
+};
 
 handleRegisterUser.validate = [
   body("name")
@@ -385,39 +412,27 @@ handleRegisterUser.validate = [
     .isLength({ min: 8 })
     .withMessage("Password must be at least 8 characters long"),
   body("phone")
-      .notEmpty()
-      .withMessage("Phone number is required")
-      .isMobilePhone()
-      .withMessage("Please provide a valid phone number"),
+    .notEmpty()
+    .withMessage("Phone number is required")
+    .isMobilePhone()
+    .withMessage("Please provide a valid phone number"),
 
-    body("address.street")
-      .notEmpty()
-      .withMessage("Street is required"),
+  body("address.street").notEmpty().withMessage("Street is required"),
 
-    body("address.city")
-      .notEmpty()
-      .withMessage("City is required"),
+  body("address.city").notEmpty().withMessage("City is required"),
 
-    body("address.state")
-      .notEmpty()
-      .withMessage("State is required"),
+  body("address.state").notEmpty().withMessage("State is required"),
 
-    body("address.postalCode")
-      .notEmpty()
-      .withMessage("Postal code is required"),
+  body("address.postalCode").notEmpty().withMessage("Postal code is required"),
 
-    body("address.country")
-      .notEmpty()
-      .withMessage("Country is required"),
+  body("address.country").notEmpty().withMessage("Country is required"),
 
-    body("gender")
-      .notEmpty()
-      .withMessage("Gender is required")
-      .isIn(["male", "female", "other"])
-      .withMessage("Gender must be male, female, or other"),
-    body("dateOfBirth")
-  .notEmpty()
-  .withMessage("Date of birth is required")
+  body("gender")
+    .notEmpty()
+    .withMessage("Gender is required")
+    .isIn(["male", "female", "other"])
+    .withMessage("Gender must be male, female, or other"),
+  body("dateOfBirth").notEmpty().withMessage("Date of birth is required"),
 ];
 
 handleLoginUser.validate = [
@@ -438,9 +453,7 @@ handleUpdateProfile.validate = [
     .optional()
     .isIn(["male", "female", "other"])
     .withMessage("Gender must be male, female, or other"),
-  body("dateOfBirth")
-  .notEmpty()
-  .withMessage("Date of birth is required"),
+  body("dateOfBirth").notEmpty().withMessage("Date of birth is required"),
   body("address.street")
     .optional()
     .notEmpty()
@@ -465,11 +478,10 @@ handleBookAppointment.validate = [
     .withMessage("Date must be in DD-MM-YYYY format"),
 
   body("slotTime")
-  .notEmpty()
-  .withMessage("Slot time is required")
-  .matches(/^(0?[1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i)
-  .withMessage("Time must be in hh:mm AM/PM format"),
-
+    .notEmpty()
+    .withMessage("Slot time is required")
+    .matches(/^(0?[1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i)
+    .withMessage("Time must be in hh:mm AM/PM format"),
 ];
 
 export {
@@ -480,6 +492,5 @@ export {
   handleBookAppointment,
   handleCancelAndDeleteAppointment,
   handleListAppointments,
-  handleGetAllDoctors
+  handleGetAllDoctors,
 };
-

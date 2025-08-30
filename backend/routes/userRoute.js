@@ -2,6 +2,7 @@ import express from 'express'
 import { handleRegisterUser,handleLoginUser,handleGetProfile, handleUpdateProfile, handleBookAppointment, handleListAppointments, handleCancelAndDeleteAppointment, handleGetAllDoctors} from  '../controllers/userController.js'
 import { jwtAuthMiddleware } from '../middlewares/auth.js'
 import {parseAddressMiddleware} from '../middlewares/parseAddress.js'
+import { createOrder } from '../middlewares/payment.js'
 import upload from '../middlewares/upload.js';
 
 const router=express.Router();
@@ -15,5 +16,6 @@ router.put("/profile/update",jwtAuthMiddleware,upload.single("image"),parseAddre
 router.post("/appointment/:doctorId",jwtAuthMiddleware,handleBookAppointment.validate,handleBookAppointment)
 router.get("/appointments",jwtAuthMiddleware,handleListAppointments)
 router.put("/cancel-appointment/:appointmentId",jwtAuthMiddleware,handleCancelAndDeleteAppointment)
+router.post("/create-order", jwtAuthMiddleware, createOrder);
 
 export default router
